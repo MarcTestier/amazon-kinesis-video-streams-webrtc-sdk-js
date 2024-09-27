@@ -252,7 +252,8 @@ $('#viewer-button').click(async () => {
     $('#viewer').removeClass('d-none');
 
     const localView = $('#viewer .local-view')[0];
-    const remoteView = $('#viewer .remote-view')[0];
+    const remoteView1 = $('#viewer .remote-view-1')[0];
+    const remoteView2 = $('#viewer .remote-view-2')[0];
     const localMessage = $('#viewer .local-message')[0];
     const remoteMessage = $('#viewer .remote-message')[0];
 
@@ -271,7 +272,7 @@ $('#viewer-button').click(async () => {
 
     printFormValues(formValues);
 
-    startViewer(localView, remoteView, formValues, onStatsReport, remoteMessage);
+    startViewer(localView, remoteView1, remoteView2, formValues, onStatsReport, remoteMessage);
 });
 
 function updateViewerUI() {

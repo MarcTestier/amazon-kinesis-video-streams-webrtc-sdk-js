@@ -256,7 +256,7 @@ let dataChannelLatencyCalcMessage = {
     'lastMessageFromViewerTs': ''
 }
 
-async function startViewer(localView, remoteView, formValues, onStatsReport, remoteMessage) {
+async function startViewer(localView, remoteView1, remoteView2, formValues, onStatsReport, remoteMessage) {
     try {
         console.log('[VIEWER] Client id is:', formValues.clientId);
         viewerButtonPressed = new Date();
@@ -266,9 +266,29 @@ async function startViewer(localView, remoteView, formValues, onStatsReport, rem
         }
 
         viewer.localView = localView;
-        viewer.remoteView = remoteView;
+        viewer.remoteView1 = remoteView1;
+        viewer.remoteView2 = remoteView2;
 
-        viewer.remoteView.addEventListener('loadeddata', () => {
+        viewer.remoteView1.addEventListener('loadeddata', () => {
+            metrics.viewer.ttff.endTime = Date.now();
+            if (formValues.enableProfileTimeline) {
+                metrics.viewer.ttffAfterPc.endTime = metrics.viewer.ttff.endTime;
+                metrics.master.ttffAfterPc.endTime = metrics.viewer.ttff.endTime;
+
+
+                // if the ice-gathering on the master side is not complete by the time the metrics are sent, the endTime > startTime
+                // in order to plot it, we can show it as an ongoing process
+                if (metrics.master.iceGathering.startTime > metrics.master.iceGathering.endTime) {
+                    metrics.master.iceGathering.endTime = metrics.viewer.ttff.endTime;
+                }
+            }
+            if(formValues.enableDQPmetrics) {
+                timeToFirstFrameFromOffer = metrics.viewer.ttff.endTime - metrics.viewer.offAnswerTime.startTime;
+                timeToFirstFrameFromViewerStart = metrics.viewer.ttff.endTime - viewerButtonPressed.getTime();
+            }
+        });
+
+        viewer.remoteView2.addEventListener('loadeddata', () => {
             metrics.viewer.ttff.endTime = Date.now();
             if (formValues.enableProfileTimeline) {
                 metrics.viewer.ttffAfterPc.endTime = metrics.viewer.ttff.endTime;
@@ -687,11 +707,17 @@ async function startViewer(localView, remoteView, formValues, onStatsReport, rem
 
             // Create an SDP offer to send to the master
             console.log('[VIEWER] Creating SDP offer');
+            viewer.peerConnection.addTransceiver("video", {
+                direction: "recvonly",
+            });
+            viewer.peerConnection.addTransceiver("video", {
+                direction: "recvonly",
+            });
             await viewer.peerConnection.setLocalDescription(
-                await viewer.peerConnection.createOffer({
-                    offerToReceiveAudio: true,
+                /*await viewer.peerConnection.createOffer({
+                    offerToReceiveAudio: false,
                     offerToReceiveVideo: true,
-                }),
+                }),*/
             );
 
             // When trickle ICE is enabled, send the offer now and then send ICE candidates as they are generated. Otherwise wait on the ICE candidates.
@@ -765,11 +791,16 @@ async function startViewer(localView, remoteView, formValues, onStatsReport, rem
         // As remote tracks are received, add them to the remote view
         viewer.peerConnection.addEventListener('track', event => {
             console.log('[VIEWER] Received remote track with id:', event?.streams[0]?.id ?? '[Error retrieving track ID]');
-            if (remoteView.srcObject) {
+
+            if (remoteView1.srcObject && remoteView2.srcObject) {
                 return;
             }
             viewer.remoteStream = event.streams[0];
-            remoteView.srcObject = viewer.remoteStream;
+            if (event?.streams[0]?.id === "myKvsVideoStream1") {
+                remoteView1.srcObject = viewer.remoteStream;
+            } else if (event?.streams[0]?.id === "myKvsVideoStream2") {
+                remoteView2.srcObject = viewer.remoteStream;
+            }
 
             //measure the time to first track
             if (formValues.enableDQPmetrics && initialDate === 0) {
@@ -817,8 +848,12 @@ function stopViewer() {
             viewer.localView.srcObject = null;
         }
 
-        if (viewer.remoteView) {
-            viewer.remoteView.srcObject = null;
+        if (viewer.remoteView1) {
+            viewer.remoteView1.srcObject = null;
+        }
+
+        if (viewer.remoteView2) {
+            viewer.remoteView2.srcObject = null;
         }
 
         if (viewer.dataChannel) {
